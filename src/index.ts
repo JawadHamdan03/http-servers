@@ -103,7 +103,7 @@ app.use(middlewareLogResponses);
 app.use("/app", express.static("./src/app"));
 app.get("/api/healthz", handlerReadiness);
 app.get("/admin/metrics", handlerAdminMetrics);
-app.get("/admin/reset", handlerReset);
+app.post("/admin/reset", handlerReset);
 app.post("/api/validate_chirp", handlerValidateChirp);
 
 app.listen(PORT, () => {
