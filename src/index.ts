@@ -85,8 +85,21 @@ const handlerValidateChirp = async (req: Request, res: Response) => {
     return;
   }
 
+  const profaneWords = ["kerfuffle", "sharbert", "fornax"];
+
+  const words = chirp.split(" ");
+
+  const cleanedWords = words.map((word) => {
+    if (profaneWords.includes(word.toLowerCase())) {
+      return "****";
+    }
+    return word;
+  });
+
+  const cleanedBody = cleanedWords.join(" ");
+
   res.status(200).json({
-    valid: true,
+    cleanedBody: cleanedBody,
   });
 }
 

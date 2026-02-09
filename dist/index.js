@@ -40,20 +40,31 @@ const handlerReset = async (req, res) => {
 };
 const handlerValidateChirp = async (req, res) => {
     const chirp = req.body?.body;
+    // Invalid body
     if (!chirp || typeof chirp !== "string") {
         res.status(400).json({
             error: "Invalid chirp body",
         });
         return;
     }
+    // Length validation
     if (chirp.length > 140) {
         res.status(400).json({
             error: "Chirp is too long",
         });
         return;
     }
+    const profaneWords = ["kerfuffle", "sharbert", "fornax"];
+    const words = chirp.split(" ");
+    const cleanedWords = words.map((word) => {
+        if (profaneWords.includes(word.toLowerCase())) {
+            return "****";
+        }
+        return word;
+    });
+    const cleanedBody = cleanedWords.join(" ");
     res.status(200).json({
-        valid: true,
+        cleanedBody: cleanedBody,
     });
 };
 ////////////////////////////////////////////
@@ -65,7 +76,7 @@ app.use(middlewareLogResponses);
 app.use("/app", express.static("./src/app"));
 app.get("/api/healthz", handlerReadiness);
 app.get("/admin/metrics", handlerAdminMetrics);
-app.get("/admin/reset", handlerReset);
+app.post("/admin/reset", handlerReset);
 app.post("/api/validate_chirp", handlerValidateChirp);
 app.listen(PORT, () => {
     console.log(`Server is running at http://localhost:${PORT}`);
