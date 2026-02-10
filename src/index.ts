@@ -7,6 +7,7 @@ import {
   NotFound,
 } from "./CustomErrors.js";
 import { createUser, deleteAllUsers } from "./db/queries/users.js";
+import { createChirp } from "./db/queries/chirps.js";
 
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -115,16 +116,21 @@ const handlerCreateUser = async (
   }
 };
 
-const handlerValidateChirp = (
+const handlerCreateChirp = async (
   req: Request,
   res: Response,
   next: NextFunction
-): void => {
+): Promise<void> => {
   try {
     const chirp = req.body?.body;
+    const userId = req.body?.userId;
 
     if (!chirp || typeof chirp !== "string") {
       throw new BadRequest("Invalid chirp body");
+    }
+
+    if (!userId || typeof userId !== "string") {
+      throw new BadRequest("Invalid userId");
     }
 
     if (chirp.length > 140) {
@@ -140,7 +146,8 @@ const handlerValidateChirp = (
       )
       .join(" ");
 
-    res.status(200).json({ cleanedBody });
+    const created = await createChirp({ body: cleanedBody, userId });
+    res.status(201).json(created);
   } catch (err) {
     next(err);
   }
@@ -197,8 +204,8 @@ app.use("/app", express.static("./src/app"));
 app.get("/api/healthz", handlerReadiness);
 app.get("/admin/metrics", handlerAdminMetrics);
 app.post("/admin/reset", handlerReset);
-app.post("/api/validate_chirp", handlerValidateChirp);
 app.post("/api/users", handlerCreateUser);
+app.post("/api/chirps", handlerCreateChirp);
 
 app.use(errorHandler);
 
