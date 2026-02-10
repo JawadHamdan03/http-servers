@@ -6,8 +6,10 @@ import {
   Forbidden,
   NotFound,
 } from "./CustomErrors.js";
-import { createUser, deleteAllUsers } from "./db/queries/users.js";
+import { checkPasswordHash, hashPassword } from "./auth.js";
+import { createUser, deleteAllUsers, getUserByEmail } from "./db/queries/users.js";
 import { createChirp, getChirpById, getChirps } from "./db/queries/chirps.js";
+import type { User } from "./db/schema.js";
 
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -50,6 +52,8 @@ const middlewareLogResponses = (
 /* =====================
    Handlers
 ===================== */
+
+type UserResponse = Omit<User, "hashedPassword">;
 
 const handlerReadiness = (
   req: Request,
@@ -99,20 +103,62 @@ const handlerCreateUser = async (
 ): Promise<void> => {
   try {
     const email = req.body?.email;
+    const password = req.body?.password;
 
     if (!email || typeof email !== "string") {
       throw new BadRequest("Invalid email");
     }
 
-    const user = await createUser({ email });
+    if (!password || typeof password !== "string") {
+      throw new BadRequest("Invalid password");
+    }
+
+    const hashedPassword = await hashPassword(password);
+
+    const user = await createUser({ email, hashedPassword });
 
     if (!user) {
       throw new BadRequest("User already exists");
     }
 
-    res.status(201).json(user);
+    const { hashedPassword: _ignored, ...userResponse } = user;
+    res.status(201).json(userResponse as UserResponse);
   } catch (err) {
     next(err);
+  }
+};
+
+const handlerLogin = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const email = req.body?.email;
+    const password = req.body?.password;
+
+    if (!email || typeof email !== "string") {
+      throw new Unauthorized("incorrect email or password");
+    }
+
+    if (!password || typeof password !== "string") {
+      throw new Unauthorized("incorrect email or password");
+    }
+
+    const user = await getUserByEmail(email);
+    if (!user) {
+      throw new Unauthorized("incorrect email or password");
+    }
+
+    const isValid = await checkPasswordHash(password, user.hashedPassword);
+    if (!isValid) {
+      throw new Unauthorized("incorrect email or password");
+    }
+
+    const { hashedPassword: _ignored, ...userResponse } = user;
+    res.status(200).json(userResponse as UserResponse);
+  } catch (err) {
+    next(new Unauthorized("incorrect email or password"));
   }
 };
 
@@ -244,6 +290,7 @@ app.get("/api/chirps", handlerGetChirps);
 app.get("/api/chirps/:chirpId", handlerGetChirpById);
 app.post("/admin/reset", handlerReset);
 app.post("/api/users", handlerCreateUser);
+app.post("/api/login", handlerLogin);
 app.post("/api/chirps", handlerCreateChirp);
 
 app.use(errorHandler);

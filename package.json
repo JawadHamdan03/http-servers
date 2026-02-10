@@ -10,7 +10,6 @@
     "dev": "npx tsc && node dist/index.js",
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate"
-
   },
   "type": "module",
   "keywords": [],
@@ -23,6 +22,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "argon2": "^0.44.0",
     "drizzle-orm": "^0.45.1",
     "express": "^5.2.1",
     "postgres": "^3.4.8"
