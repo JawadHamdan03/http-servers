@@ -33,19 +33,27 @@ const middlewareLogResponses = (
 
 
 // handlers
-const handlerReadiness = async (req: Request, res: Response): Promise<void> => {
-  res
-    .set("Content-Type", "text/plain; charset=utf-8")
-    .send("OK");
+const handlerReadiness = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    res
+      .set("Content-Type", "text/plain; charset=utf-8")
+      .send("OK");
+  }
+  catch (err) {
+    next(err);
+  }
+
 };
 
 const handlerAdminMetrics = async (
   req: Request,
-  res: Response
+  res: Response,
+  next: NextFunction
 ): Promise<void> => {
-  res
-    .set("Content-Type", "text/html; charset=utf-8")
-    .send(`
+  try {
+    res
+      .set("Content-Type", "text/html; charset=utf-8")
+      .send(`
 <html>
   <body>
     <h1>Welcome, Chirpy Admin</h1>
@@ -53,54 +61,78 @@ const handlerAdminMetrics = async (
   </body>
 </html>
 `);
-};
+  }
+  catch (err) {
+    next(err);
+  }
+}
 
 
 const handlerReset = async (
   req: Request,
-  res: Response
+  res: Response,
+  next: NextFunction
 ): Promise<void> => {
   apiConfig.fileserverHits = 0;
+  try {
+    res
+      .set("Content-Type", "text/plain; charset=utf-8")
+      .send("OK");
+  }
+  catch (err) {
+    next(err)
+  }
 
-  res
-    .set("Content-Type", "text/plain; charset=utf-8")
-    .send("OK");
 };
 
 
 const handlerValidateChirp = async (req: Request, res: Response) => {
   const chirp = req.body?.body;
 
-  if (!chirp || typeof chirp !== "string") {
-    res.status(400).json({
-      error: "Invalid chirp body",
-    });
-    return;
-  }
-
-  if (chirp.length > 140) {
-    res.status(400).json({
-      error: "Chirp is too long",
-    });
-    return;
-  }
-
-  const profaneWords = ["kerfuffle", "sharbert", "fornax"];
-
-  const words = chirp.split(" ");
-
-  const cleanedWords = words.map((word) => {
-    if (profaneWords.includes(word.toLowerCase())) {
-      return "****";
+  try {
+    if (!chirp || typeof chirp !== "string") {
+      res.status(400).json({
+        error: "Invalid chirp body",
+      });
+      return;
     }
-    return word;
-  });
 
-  const cleanedBody = cleanedWords.join(" ");
+    if (chirp.length > 140) {
+      throw new Error("Chirp is too long");
+      res.status(400).json({
+        error: "Chirp is too long",
+      });
+      return;
+    }
 
-  res.status(200).json({
-    cleanedBody: cleanedBody,
-  });
+    const profaneWords = ["kerfuffle", "sharbert", "fornax"];
+
+    const words = chirp.split(" ");
+
+    const cleanedWords = words.map((word) => {
+      if (profaneWords.includes(word.toLowerCase())) {
+        return "****";
+      }
+      return word;
+    });
+
+    const cleanedBody = cleanedWords.join(" ");
+
+    res.status(200).json({
+      cleanedBody: cleanedBody,
+    });
+  }
+
+  catch (err) {
+
+  }
+
+}
+
+
+const errorHandler = async (err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error(`${err.message}`);
+  res.status(500).json({ error: "Something went wrong on our end" });
 }
 
 
@@ -118,6 +150,10 @@ app.get("/api/healthz", handlerReadiness);
 app.get("/admin/metrics", handlerAdminMetrics);
 app.post("/admin/reset", handlerReset);
 app.post("/api/validate_chirp", handlerValidateChirp);
+
+
+app.use(errorHandler);
+
 
 app.listen(PORT, () => {
   console.log(`Server is running at http://localhost:${PORT}`);

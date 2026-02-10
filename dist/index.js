@@ -15,15 +15,21 @@ const middlewareLogResponses = (req, res, next) => {
     next();
 };
 // handlers
-const handlerReadiness = async (req, res) => {
-    res
-        .set("Content-Type", "text/plain; charset=utf-8")
-        .send("OK");
+const handlerReadiness = async (req, res, next) => {
+    try {
+        res
+            .set("Content-Type", "text/plain; charset=utf-8")
+            .send("OK");
+    }
+    catch (err) {
+        next(err);
+    }
 };
-const handlerAdminMetrics = async (req, res) => {
-    res
-        .set("Content-Type", "text/html; charset=utf-8")
-        .send(`
+const handlerAdminMetrics = async (req, res, next) => {
+    try {
+        res
+            .set("Content-Type", "text/html; charset=utf-8")
+            .send(`
 <html>
   <body>
     <h1>Welcome, Chirpy Admin</h1>
@@ -31,41 +37,57 @@ const handlerAdminMetrics = async (req, res) => {
   </body>
 </html>
 `);
+    }
+    catch (err) {
+        next(err);
+    }
 };
-const handlerReset = async (req, res) => {
+const handlerReset = async (req, res, next) => {
     apiConfig.fileserverHits = 0;
-    res
-        .set("Content-Type", "text/plain; charset=utf-8")
-        .send("OK");
+    try {
+        res
+            .set("Content-Type", "text/plain; charset=utf-8")
+            .send("OK");
+    }
+    catch (err) {
+        next(err);
+    }
 };
 const handlerValidateChirp = async (req, res) => {
     const chirp = req.body?.body;
-    // Invalid body
-    if (!chirp || typeof chirp !== "string") {
-        res.status(400).json({
-            error: "Invalid chirp body",
-        });
-        return;
-    }
-    // Length validation
-    if (chirp.length > 140) {
-        res.status(400).json({
-            error: "Chirp is too long",
-        });
-        return;
-    }
-    const profaneWords = ["kerfuffle", "sharbert", "fornax"];
-    const words = chirp.split(" ");
-    const cleanedWords = words.map((word) => {
-        if (profaneWords.includes(word.toLowerCase())) {
-            return "****";
+    try {
+        if (!chirp || typeof chirp !== "string") {
+            res.status(400).json({
+                error: "Invalid chirp body",
+            });
+            return;
         }
-        return word;
-    });
-    const cleanedBody = cleanedWords.join(" ");
-    res.status(200).json({
-        cleanedBody: cleanedBody,
-    });
+        if (chirp.length > 140) {
+            throw new Error("Chirp is too long");
+            res.status(400).json({
+                error: "Chirp is too long",
+            });
+            return;
+        }
+        const profaneWords = ["kerfuffle", "sharbert", "fornax"];
+        const words = chirp.split(" ");
+        const cleanedWords = words.map((word) => {
+            if (profaneWords.includes(word.toLowerCase())) {
+                return "****";
+            }
+            return word;
+        });
+        const cleanedBody = cleanedWords.join(" ");
+        res.status(200).json({
+            cleanedBody: cleanedBody,
+        });
+    }
+    catch (err) {
+    }
+};
+const errorHandler = async (err, req, res, next) => {
+    console.error(`${err.message}`);
+    res.status(500).json({ error: "Something went wrong on our end" });
 };
 ////////////////////////////////////////////
 const app = express();
@@ -78,6 +100,7 @@ app.get("/api/healthz", handlerReadiness);
 app.get("/admin/metrics", handlerAdminMetrics);
 app.post("/admin/reset", handlerReset);
 app.post("/api/validate_chirp", handlerValidateChirp);
+app.use(errorHandler);
 app.listen(PORT, () => {
     console.log(`Server is running at http://localhost:${PORT}`);
 });
