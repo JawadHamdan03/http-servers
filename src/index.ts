@@ -138,7 +138,7 @@ const errorHandler = async (err: Error, req: Request, res: Response, next: NextF
   else if (err instanceof Forbidden)
     res.status(403).send("Forbidden");
   else if (err instanceof BadRequest)
-    res.status(400).send("Bad Request");
+    res.status(400).send({ err: err.message });
   else res.status(500).send("Something went wrong on our end")
 }
 
