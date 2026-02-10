@@ -2,6 +2,7 @@ import express from "express";
 import { config } from "./config.js";
 import { BadRequest, Unauthorized, Forbidden, NotFound, } from "./CustomErrors.js";
 import { createUser, deleteAllUsers } from "./db/queries/users.js";
+import { createChirp, getChirps } from "./db/queries/chirps.js";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -69,11 +70,15 @@ const handlerCreateUser = async (req, res, next) => {
         next(err);
     }
 };
-const handlerValidateChirp = (req, res, next) => {
+const handlerCreateChirp = async (req, res, next) => {
     try {
         const chirp = req.body?.body;
+        const userId = req.body?.userId;
         if (!chirp || typeof chirp !== "string") {
             throw new BadRequest("Invalid chirp body");
+        }
+        if (!userId || typeof userId !== "string") {
+            throw new BadRequest("Invalid userId");
         }
         if (chirp.length > 140) {
             throw new BadRequest("Chirp is too long. Max length is 140");
@@ -83,7 +88,17 @@ const handlerValidateChirp = (req, res, next) => {
             .split(" ")
             .map((word) => profaneWords.includes(word.toLowerCase()) ? "****" : word)
             .join(" ");
-        res.status(200).json({ cleanedBody });
+        const created = await createChirp({ body: cleanedBody, userId });
+        res.status(201).json(created);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+const handlerGetChirps = async (req, res, next) => {
+    try {
+        const chirps = await getChirps();
+        res.status(200).json(chirps);
     }
     catch (err) {
         next(err);
@@ -124,9 +139,10 @@ app.use("/app", middlewareMetricsInc);
 app.use("/app", express.static("./src/app"));
 app.get("/api/healthz", handlerReadiness);
 app.get("/admin/metrics", handlerAdminMetrics);
+app.get("/api/chirps", handlerGetChirps);
 app.post("/admin/reset", handlerReset);
-app.post("/api/validate_chirp", handlerValidateChirp);
 app.post("/api/users", handlerCreateUser);
+app.post("/api/chirps", handlerCreateChirp);
 app.use(errorHandler);
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);

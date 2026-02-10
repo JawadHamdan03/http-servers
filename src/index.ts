@@ -7,7 +7,7 @@ import {
   NotFound,
 } from "./CustomErrors.js";
 import { createUser, deleteAllUsers } from "./db/queries/users.js";
-import { createChirp } from "./db/queries/chirps.js";
+import { createChirp, getChirps } from "./db/queries/chirps.js";
 
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -153,6 +153,19 @@ const handlerCreateChirp = async (
   }
 };
 
+const handlerGetChirps = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const chirps = await getChirps();
+    res.status(200).json(chirps);
+  } catch (err) {
+    next(err);
+  }
+};
+
 /* =====================
    Error Handler
 ===================== */
@@ -203,6 +216,7 @@ app.use("/app", express.static("./src/app"));
 
 app.get("/api/healthz", handlerReadiness);
 app.get("/admin/metrics", handlerAdminMetrics);
+app.get("/api/chirps", handlerGetChirps);
 app.post("/admin/reset", handlerReset);
 app.post("/api/users", handlerCreateUser);
 app.post("/api/chirps", handlerCreateChirp);
