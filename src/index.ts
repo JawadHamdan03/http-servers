@@ -7,10 +7,20 @@ import {
   NotFound,
 } from "./CustomErrors.js";
 
-/* =====================
-   Middleware
-===================== */
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
 
+
+/* ---------- RUN MIGRATIONS ON STARTUP ---------- */
+const migrationClient = postgres(config.url, { max: 1 });
+await migrate(drizzle(migrationClient), config.migrationConfig);
+await migrationClient.end();
+
+
+
+
+//   Middleware
 const middlewareMetricsInc = (
   req: Request,
   res: Response,
