@@ -1,5 +1,5 @@
- import process from "process";
- import type { MigrationConfig } from "drizzle-orm/migrator";
+import process from "process";
+import type { MigrationConfig } from "drizzle-orm/migrator";
 
 process.loadEnvFile();
 
@@ -14,6 +14,7 @@ function envOrThrow(key: string): string {
 
 export type APIConfig = {
   fileserverHits: number;
+  platform: string;
 };
 
 export type DBConfig = {
@@ -31,6 +32,7 @@ const migrationConfig: MigrationConfig = {
 
 export const config: APIConfig & DBConfig = {
   fileserverHits: 0,
+  platform: envOrThrow("PLATFORM"),
   url: envOrThrow("DB_URL"),
-  migrationConfig  
+  migrationConfig
 };

@@ -1,6 +1,7 @@
 import express from "express";
 import { config } from "./config.js";
 import { BadRequest, Unauthorized, Forbidden, NotFound, } from "./CustomErrors.js";
+import { createUser, deleteAllUsers } from "./db/queries/users.js";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -39,9 +40,34 @@ const handlerAdminMetrics = (req, res) => {
 </html>
 `);
 };
-const handlerReset = (req, res) => {
-    config.fileserverHits = 0;
-    res.set("Content-Type", "text/plain; charset=utf-8").send("OK");
+const handlerReset = async (req, res, next) => {
+    try {
+        if (config.platform !== "dev") {
+            throw new Forbidden("Reset is only allowed in dev");
+        }
+        config.fileserverHits = 0;
+        await deleteAllUsers();
+        res.set("Content-Type", "text/plain; charset=utf-8").send("OK");
+    }
+    catch (err) {
+        next(err);
+    }
+};
+const handlerCreateUser = async (req, res, next) => {
+    try {
+        const email = req.body?.email;
+        if (!email || typeof email !== "string") {
+            throw new BadRequest("Invalid email");
+        }
+        const user = await createUser({ email });
+        if (!user) {
+            throw new BadRequest("User already exists");
+        }
+        res.status(201).json(user);
+    }
+    catch (err) {
+        next(err);
+    }
 };
 const handlerValidateChirp = (req, res, next) => {
     try {
@@ -98,8 +124,9 @@ app.use("/app", middlewareMetricsInc);
 app.use("/app", express.static("./src/app"));
 app.get("/api/healthz", handlerReadiness);
 app.get("/admin/metrics", handlerAdminMetrics);
-app.get("/admin/reset", handlerReset);
+app.post("/admin/reset", handlerReset);
 app.post("/api/validate_chirp", handlerValidateChirp);
+app.post("/api/users", handlerCreateUser);
 app.use(errorHandler);
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
