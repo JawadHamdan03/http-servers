@@ -15,6 +15,7 @@ function envOrThrow(key: string): string {
 export type APIConfig = {
   fileserverHits: number;
   platform: string;
+  jwtSecret: string;
 };
 
 export type DBConfig = {
@@ -33,6 +34,7 @@ const migrationConfig: MigrationConfig = {
 export const config: APIConfig & DBConfig = {
   fileserverHits: 0,
   platform: envOrThrow("PLATFORM"),
+  jwtSecret: envOrThrow("JWT_SECRET"),
   url: envOrThrow("DB_URL"),
   migrationConfig
 };

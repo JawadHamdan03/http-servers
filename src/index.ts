@@ -6,7 +6,7 @@ import {
   Forbidden,
   NotFound,
 } from "./CustomErrors.js";
-import { checkPasswordHash, hashPassword } from "./auth.js";
+import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, validateJWT } from "./auth.js";
 import { createUser, deleteAllUsers, getUserByEmail } from "./db/queries/users.js";
 import { createChirp, getChirpById, getChirps } from "./db/queries/chirps.js";
 import type { User } from "./db/schema.js";
@@ -136,6 +136,7 @@ const handlerLogin = async (
   try {
     const email = req.body?.email;
     const password = req.body?.password;
+    const expiresInSeconds = req.body?.expiresInSeconds;
 
     if (!email || typeof email !== "string") {
       throw new Unauthorized("incorrect email or password");
@@ -143,6 +144,18 @@ const handlerLogin = async (
 
     if (!password || typeof password !== "string") {
       throw new Unauthorized("incorrect email or password");
+    }
+
+    let tokenExpiresInSeconds = 60 * 60;
+    if (expiresInSeconds !== undefined) {
+      if (
+        typeof expiresInSeconds !== "number" ||
+        !Number.isFinite(expiresInSeconds) ||
+        expiresInSeconds <= 0
+      ) {
+        throw new BadRequest("Invalid expiresInSeconds");
+      }
+      tokenExpiresInSeconds = Math.min(expiresInSeconds, 60 * 60);
     }
 
     const user = await getUserByEmail(email);
@@ -155,10 +168,11 @@ const handlerLogin = async (
       throw new Unauthorized("incorrect email or password");
     }
 
+    const token = makeJWT(user.id, tokenExpiresInSeconds, config.jwtSecret);
     const { hashedPassword: _ignored, ...userResponse } = user;
-    res.status(200).json(userResponse as UserResponse);
+    res.status(200).json({ ...userResponse, token } as UserResponse & { token: string });
   } catch (err) {
-    next(new Unauthorized("incorrect email or password"));
+    next(err as Error);
   }
 };
 
@@ -168,15 +182,18 @@ const handlerCreateChirp = async (
   next: NextFunction
 ): Promise<void> => {
   try {
+    let userId: string;
+    try {
+      const token = getBearerToken(req);
+      userId = validateJWT(token, config.jwtSecret);
+    } catch (error) {
+      throw new Unauthorized("Invalid or expired token");
+    }
+
     const chirp = req.body?.body;
-    const userId = req.body?.userId;
 
     if (!chirp || typeof chirp !== "string") {
       throw new BadRequest("Invalid chirp body");
-    }
-
-    if (!userId || typeof userId !== "string") {
-      throw new BadRequest("Invalid userId");
     }
 
     if (chirp.length > 140) {
