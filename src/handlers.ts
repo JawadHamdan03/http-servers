@@ -30,6 +30,7 @@ import {
     createUser,
     deleteAllUsers,
     getUserByEmail,
+    upgradeUserToChirpyRed,
     updateUserById,
 } from "./db/queries/users.js";
 import type { User } from "./db/schema.js";
@@ -358,6 +359,34 @@ export const handlerDeleteChirp = async (
         }
 
         await deleteChirpById(chirpId);
+        res.status(204).send();
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const handlerPolkaWebhook = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<void> => {
+    try {
+        const event = req.body?.event;
+        if (event !== "user.upgraded") {
+            res.status(204).send();
+            return;
+        }
+
+        const userId = req.body?.data?.userId;
+        if (!userId || typeof userId !== "string") {
+            throw new BadRequest("Invalid userId");
+        }
+
+        const updated = await upgradeUserToChirpyRed(userId);
+        if (!updated) {
+            throw new NotFound("User not found");
+        }
+
         res.status(204).send();
     } catch (err) {
         next(err);

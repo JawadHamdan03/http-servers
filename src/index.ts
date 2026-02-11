@@ -9,6 +9,7 @@ import {
   handlerGetChirpById,
   handlerGetChirps,
   handlerLogin,
+  handlerPolkaWebhook,
   handlerReadiness,
   handlerRefresh,
   handlerReset,
@@ -114,6 +115,7 @@ app.post("/api/refresh", handlerRefresh);
 app.post("/api/revoke", handlerRevoke);
 app.put("/api/users", handlerUpdateUser);
 app.delete("/api/chirps/:chirpId", handlerDeleteChirp);
+app.post("/api/polka/webhooks", handlerPolkaWebhook);
 
 app.use(errorHandler);
 

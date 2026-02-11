@@ -29,6 +29,13 @@
       "when": 1771000000000,
       "tag": "0003_refresh_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1771005000000,
+      "tag": "0004_chirpy_red",
+      "breakpoints": true
     }
   ]
 }

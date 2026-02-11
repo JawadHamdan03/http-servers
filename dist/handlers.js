@@ -2,8 +2,8 @@ import { config } from "./config.js";
 import { BadRequest, Forbidden, NotFound, Unauthorized, } from "./CustomErrors.js";
 import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, makeRefreshToken, validateJWT, } from "./auth.js";
 import { createRefreshToken, getRefreshToken, getUserFromRefreshToken, revokeRefreshToken, } from "./db/queries/refreshTokens.js";
-import { createChirp, getChirpById, getChirps } from "./db/queries/chirps.js";
-import { createUser, deleteAllUsers, getUserByEmail, updateUserById, } from "./db/queries/users.js";
+import { createChirp, deleteChirpById, getChirpById, getChirps, } from "./db/queries/chirps.js";
+import { createUser, deleteAllUsers, getUserByEmail, upgradeUserToChirpyRed, updateUserById, } from "./db/queries/users.js";
 export const handlerReadiness = (req, res) => {
     res.set("Content-Type", "text/plain; charset=utf-8").send("OK");
 };
@@ -216,6 +216,55 @@ export const handlerGetChirpById = async (req, res, next) => {
             throw new NotFound("Chirp not found");
         }
         res.status(200).json(chirp);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+export const handlerDeleteChirp = async (req, res, next) => {
+    try {
+        let userId;
+        try {
+            const token = getBearerToken(req);
+            userId = validateJWT(token, config.jwtSecret);
+        }
+        catch (error) {
+            throw new Unauthorized("Invalid or expired token");
+        }
+        const chirpId = req.params.chirpId;
+        if (!chirpId || Array.isArray(chirpId)) {
+            throw new BadRequest("Invalid chirp id");
+        }
+        const chirp = await getChirpById(chirpId);
+        if (!chirp) {
+            throw new NotFound("Chirp not found");
+        }
+        if (chirp.userId !== userId) {
+            throw new Forbidden("Not allowed");
+        }
+        await deleteChirpById(chirpId);
+        res.status(204).send();
+    }
+    catch (err) {
+        next(err);
+    }
+};
+export const handlerPolkaWebhook = async (req, res, next) => {
+    try {
+        const event = req.body?.event;
+        if (event !== "user.upgraded") {
+            res.status(204).send();
+            return;
+        }
+        const userId = req.body?.data?.userId;
+        if (!userId || typeof userId !== "string") {
+            throw new BadRequest("Invalid userId");
+        }
+        const updated = await upgradeUserToChirpyRed(userId);
+        if (!updated) {
+            throw new NotFound("User not found");
+        }
+        res.status(204).send();
     }
     catch (err) {
         next(err);

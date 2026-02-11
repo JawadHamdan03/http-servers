@@ -1,7 +1,7 @@
 import express from "express";
 import { config } from "./config.js";
 import { BadRequest, Forbidden, NotFound, Unauthorized } from "./CustomErrors.js";
-import { handlerAdminMetrics, handlerCreateChirp, handlerCreateUser, handlerGetChirpById, handlerGetChirps, handlerLogin, handlerReadiness, handlerRefresh, handlerReset, handlerRevoke, handlerUpdateUser, } from "./handlers.js";
+import { handlerAdminMetrics, handlerCreateChirp, handlerCreateUser, handlerDeleteChirp, handlerGetChirpById, handlerGetChirps, handlerLogin, handlerPolkaWebhook, handlerReadiness, handlerRefresh, handlerReset, handlerRevoke, handlerUpdateUser, } from "./handlers.js";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -66,6 +66,8 @@ app.post("/api/chirps", handlerCreateChirp);
 app.post("/api/refresh", handlerRefresh);
 app.post("/api/revoke", handlerRevoke);
 app.put("/api/users", handlerUpdateUser);
+app.delete("/api/chirps/:chirpId", handlerDeleteChirp);
+app.post("/api/polka/webhooks", handlerPolkaWebhook);
 app.use(errorHandler);
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
