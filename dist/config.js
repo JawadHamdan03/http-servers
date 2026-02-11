@@ -13,6 +13,7 @@ const migrationConfig = {
 export const config = {
     fileserverHits: 0,
     platform: envOrThrow("PLATFORM"),
+    jwtSecret: envOrThrow("JWT_SECRET"),
     url: envOrThrow("DB_URL"),
     migrationConfig
 };

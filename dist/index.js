@@ -1,9 +1,10 @@
 import express from "express";
 import { config } from "./config.js";
 import { BadRequest, Unauthorized, Forbidden, NotFound, } from "./CustomErrors.js";
-import { checkPasswordHash, hashPassword } from "./auth.js";
+import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, makeRefreshToken, validateJWT, } from "./auth.js";
 import { createUser, deleteAllUsers, getUserByEmail } from "./db/queries/users.js";
 import { createChirp, getChirpById, getChirps } from "./db/queries/chirps.js";
+import { createRefreshToken, getRefreshToken, getUserFromRefreshToken, revokeRefreshToken, } from "./db/queries/refreshTokens.js";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -92,22 +93,37 @@ const handlerLogin = async (req, res, next) => {
         if (!isValid) {
             throw new Unauthorized("incorrect email or password");
         }
+        const token = makeJWT(user.id, 60 * 60, config.jwtSecret);
+        const refreshToken = makeRefreshToken();
+        const refreshTokenExpiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
+        await createRefreshToken({
+            token: refreshToken,
+            userId: user.id,
+            expiresAt: refreshTokenExpiresAt,
+            revokedAt: null,
+        });
         const { hashedPassword: _ignored, ...userResponse } = user;
-        res.status(200).json(userResponse);
+        res
+            .status(200)
+            .json({ ...userResponse, token, refreshToken });
     }
     catch (err) {
-        next(new Unauthorized("incorrect email or password"));
+        next(err);
     }
 };
 const handlerCreateChirp = async (req, res, next) => {
     try {
+        let userId;
+        try {
+            const token = getBearerToken(req);
+            userId = validateJWT(token, config.jwtSecret);
+        }
+        catch (error) {
+            throw new Unauthorized("Invalid or expired token");
+        }
         const chirp = req.body?.body;
-        const userId = req.body?.userId;
         if (!chirp || typeof chirp !== "string") {
             throw new BadRequest("Invalid chirp body");
-        }
-        if (!userId || typeof userId !== "string") {
-            throw new BadRequest("Invalid userId");
         }
         if (chirp.length > 140) {
             throw new BadRequest("Chirp is too long. Max length is 140");
@@ -119,6 +135,53 @@ const handlerCreateChirp = async (req, res, next) => {
             .join(" ");
         const created = await createChirp({ body: cleanedBody, userId });
         res.status(201).json(created);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+const handlerRefresh = async (req, res, next) => {
+    try {
+        let tokenString;
+        try {
+            tokenString = getBearerToken(req);
+        }
+        catch (error) {
+            throw new Unauthorized("Invalid or expired token");
+        }
+        const result = await getUserFromRefreshToken(tokenString);
+        if (!result) {
+            throw new Unauthorized("Invalid or expired token");
+        }
+        const { user, refreshToken } = result;
+        if (refreshToken.revokedAt) {
+            throw new Unauthorized("Invalid or expired token");
+        }
+        if (refreshToken.expiresAt <= new Date()) {
+            throw new Unauthorized("Invalid or expired token");
+        }
+        const token = makeJWT(user.id, 60 * 60, config.jwtSecret);
+        res.status(200).json({ token });
+    }
+    catch (err) {
+        next(err);
+    }
+};
+const handlerRevoke = async (req, res, next) => {
+    try {
+        let tokenString;
+        try {
+            tokenString = getBearerToken(req);
+        }
+        catch (error) {
+            throw new Unauthorized("Invalid or expired token");
+        }
+        const existing = await getRefreshToken(tokenString);
+        if (!existing) {
+            throw new Unauthorized("Invalid or expired token");
+        }
+        await revokeRefreshToken(tokenString, new Date());
+        res.status(204).send();
     }
     catch (err) {
         next(err);
@@ -190,6 +253,8 @@ app.post("/admin/reset", handlerReset);
 app.post("/api/users", handlerCreateUser);
 app.post("/api/login", handlerLogin);
 app.post("/api/chirps", handlerCreateChirp);
+app.post("/api/refresh", handlerRefresh);
+app.post("/api/revoke", handlerRevoke);
 app.use(errorHandler);
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);

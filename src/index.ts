@@ -6,9 +6,22 @@ import {
   Forbidden,
   NotFound,
 } from "./CustomErrors.js";
-import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, validateJWT } from "./auth.js";
+import {
+  checkPasswordHash,
+  getBearerToken,
+  hashPassword,
+  makeJWT,
+  makeRefreshToken,
+  validateJWT,
+} from "./auth.js";
 import { createUser, deleteAllUsers, getUserByEmail } from "./db/queries/users.js";
 import { createChirp, getChirpById, getChirps } from "./db/queries/chirps.js";
+import {
+  createRefreshToken,
+  getRefreshToken,
+  getUserFromRefreshToken,
+  revokeRefreshToken,
+} from "./db/queries/refreshTokens.js";
 import type { User } from "./db/schema.js";
 
 import postgres from "postgres";
@@ -136,7 +149,6 @@ const handlerLogin = async (
   try {
     const email = req.body?.email;
     const password = req.body?.password;
-    const expiresInSeconds = req.body?.expiresInSeconds;
 
     if (!email || typeof email !== "string") {
       throw new Unauthorized("incorrect email or password");
@@ -144,18 +156,6 @@ const handlerLogin = async (
 
     if (!password || typeof password !== "string") {
       throw new Unauthorized("incorrect email or password");
-    }
-
-    let tokenExpiresInSeconds = 60 * 60;
-    if (expiresInSeconds !== undefined) {
-      if (
-        typeof expiresInSeconds !== "number" ||
-        !Number.isFinite(expiresInSeconds) ||
-        expiresInSeconds <= 0
-      ) {
-        throw new BadRequest("Invalid expiresInSeconds");
-      }
-      tokenExpiresInSeconds = Math.min(expiresInSeconds, 60 * 60);
     }
 
     const user = await getUserByEmail(email);
@@ -168,9 +168,22 @@ const handlerLogin = async (
       throw new Unauthorized("incorrect email or password");
     }
 
-    const token = makeJWT(user.id, tokenExpiresInSeconds, config.jwtSecret);
+    const token = makeJWT(user.id, 60 * 60, config.jwtSecret);
+    const refreshToken = makeRefreshToken();
+    const refreshTokenExpiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
+    await createRefreshToken({
+      token: refreshToken,
+      userId: user.id,
+      expiresAt: refreshTokenExpiresAt,
+      revokedAt: null,
+    });
     const { hashedPassword: _ignored, ...userResponse } = user;
-    res.status(200).json({ ...userResponse, token } as UserResponse & { token: string });
+    res
+      .status(200)
+      .json({ ...userResponse, token, refreshToken } as UserResponse & {
+        token: string;
+        refreshToken: string;
+      });
   } catch (err) {
     next(err as Error);
   }
@@ -213,6 +226,65 @@ const handlerCreateChirp = async (
     res.status(201).json(created);
   } catch (err) {
     next(err);
+  }
+};
+
+const handlerRefresh = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    let tokenString: string;
+    try {
+      tokenString = getBearerToken(req);
+    } catch (error) {
+      throw new Unauthorized("Invalid or expired token");
+    }
+
+    const result = await getUserFromRefreshToken(tokenString);
+    if (!result) {
+      throw new Unauthorized("Invalid or expired token");
+    }
+
+    const { user, refreshToken } = result;
+    if (refreshToken.revokedAt) {
+      throw new Unauthorized("Invalid or expired token");
+    }
+
+    if (refreshToken.expiresAt <= new Date()) {
+      throw new Unauthorized("Invalid or expired token");
+    }
+
+    const token = makeJWT(user.id, 60 * 60, config.jwtSecret);
+    res.status(200).json({ token });
+  } catch (err) {
+    next(err as Error);
+  }
+};
+
+const handlerRevoke = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    let tokenString: string;
+    try {
+      tokenString = getBearerToken(req);
+    } catch (error) {
+      throw new Unauthorized("Invalid or expired token");
+    }
+
+    const existing = await getRefreshToken(tokenString);
+    if (!existing) {
+      throw new Unauthorized("Invalid or expired token");
+    }
+
+    await revokeRefreshToken(tokenString, new Date());
+    res.status(204).send();
+  } catch (err) {
+    next(err as Error);
   }
 };
 
@@ -309,6 +381,8 @@ app.post("/admin/reset", handlerReset);
 app.post("/api/users", handlerCreateUser);
 app.post("/api/login", handlerLogin);
 app.post("/api/chirps", handlerCreateChirp);
+app.post("/api/refresh", handlerRefresh);
+app.post("/api/revoke", handlerRevoke);
 
 app.use(errorHandler);
 
